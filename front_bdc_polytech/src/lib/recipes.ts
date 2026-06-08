@@ -10,6 +10,32 @@ export type Recipe = {
   steps: string[];
 };
 
+type RecipeRow = {
+  slug: string;
+  title: string;
+  description: string;
+  tags: string[];
+  prep_minutes: number;
+  cook_minutes: number;
+  image_url: string | null;
+  ingredients: string[];
+  steps: string[];
+};
+
+function rowToRecipe(row: RecipeRow): Recipe {
+  return {
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    tags: row.tags,
+    prepMinutes: row.prep_minutes,
+    cookMinutes: row.cook_minutes,
+    imageUrl: row.image_url ?? undefined,
+    ingredients: row.ingredients,
+    steps: row.steps,
+  };
+}
+
 const mock: Recipe[] = [
   {
     title: "Carottes rôties au miel",
@@ -26,49 +52,74 @@ const mock: Recipe[] = [
       "Enfourner 25 minutes en remuant à mi-cuisson.",
     ],
   },
-  {
-    title: "Crêpes moelleuses",
-    slug: "crepes-moelleuses",
-    description: "Base parfaite pour sucré ou salé, avec une texture légère.",
-    tags: ["Dessert", "Classique"],
-    prepMinutes: 10,
-    cookMinutes: 20,
-    ingredients: ["Farine", "Lait", "Oeufs", "Sucre", "Beurre", "Sel"],
-    steps: [
-      "Mélanger farine, sucre et sel.",
-      "Ajouter oeufs puis lait progressivement.",
-      "Laisser reposer 20 minutes.",
-      "Cuire à la poêle bien chaude.",
-    ],
-  },
 ];
 
-function apiBaseUrl() {
-  return process.env.RECIPES_API_BASE_URL;
-}
-
 export async function getRecipes(): Promise<Recipe[]> {
-  const base = apiBaseUrl();
-  if (!base) return mock;
-
-  const res = await fetch(`${base}/recipes`, {
-    headers: process.env.RECIPES_API_KEY ? { Authorization: `Bearer ${process.env.RECIPES_API_KEY}` } : undefined,
-    cache: "no-store",
-  });
-
-  if (!res.ok) return mock;
-  return (await res.json()) as Recipe[];
+  if (!process.env.DATABASE_URL) return mock;
+  try {
+    const { sql } = await import("@/lib/db");
+    const rows = (await sql`
+      SELECT slug, title, description, tags, prep_minutes, cook_minutes, image_url, ingredients, steps
+      FROM recipes
+      ORDER BY created_at DESC
+    `) as RecipeRow[];
+    return rows.map(rowToRecipe);
+  } catch {
+    return mock;
+  }
 }
 
 export async function getRecipeBySlug(slug: string): Promise<Recipe | null> {
-  const base = apiBaseUrl();
-  if (!base) return mock.find((r) => r.slug === slug) ?? null;
+  if (!process.env.DATABASE_URL) return mock.find((r) => r.slug === slug) ?? null;
+  try {
+    const { sql } = await import("@/lib/db");
+    const rows = (await sql`
+      SELECT slug, title, description, tags, prep_minutes, cook_minutes, image_url, ingredients, steps
+      FROM recipes
+      WHERE slug = ${slug}
+      LIMIT 1
+    `) as RecipeRow[];
+    return rows[0] ? rowToRecipe(rows[0]) : null;
+  } catch {
+    return mock.find((r) => r.slug === slug) ?? null;
+  }
+}
 
-  const res = await fetch(`${base}/recipes/${encodeURIComponent(slug)}`, {
-    headers: process.env.RECIPES_API_KEY ? { Authorization: `Bearer ${process.env.RECIPES_API_KEY}` } : undefined,
-    cache: "no-store",
-  });
+export async function createRecipe(data: Recipe): Promise<void> {
+  const { sql } = await import("@/lib/db");
+  await sql`
+    INSERT INTO recipes (slug, title, description, tags, prep_minutes, cook_minutes, image_url, ingredients, steps)
+    VALUES (
+      ${data.slug},
+      ${data.title},
+      ${data.description},
+      ${sql.array(data.tags)},
+      ${data.prepMinutes},
+      ${data.cookMinutes},
+      ${data.imageUrl ?? null},
+      ${sql.array(data.ingredients)},
+      ${sql.array(data.steps)}
+    )
+  `;
+}
 
-  if (!res.ok) return mock.find((r) => r.slug === slug) ?? null;
-  return (await res.json()) as Recipe;
+export async function updateRecipe(slug: string, data: Recipe): Promise<void> {
+  const { sql } = await import("@/lib/db");
+  await sql`
+    UPDATE recipes SET
+      title        = ${data.title},
+      description  = ${data.description},
+      tags         = ${sql.array(data.tags)},
+      prep_minutes = ${data.prepMinutes},
+      cook_minutes = ${data.cookMinutes},
+      image_url    = ${data.imageUrl ?? null},
+      ingredients  = ${sql.array(data.ingredients)},
+      steps        = ${sql.array(data.steps)}
+    WHERE slug = ${slug}
+  `;
+}
+
+export async function deleteRecipe(slug: string): Promise<void> {
+  const { sql } = await import("@/lib/db");
+  await sql`DELETE FROM recipes WHERE slug = ${slug}`;
 }

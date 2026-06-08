@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node -e \"require('fs').rmSync('src/middleware.ts',{force:true})\"",
+    "prebuild": "node -e \"require('fs').rmSync('src/middleware.ts',{force:true})\"",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -10,6 +12,8 @@
   },
   "dependencies": {
     "next": "16.1.6",
+    "next-auth": "beta",
+    "postgres": "^3.4.5",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

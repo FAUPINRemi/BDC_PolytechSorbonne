@@ -1,0 +1,14 @@
+import type { NextAuthConfig } from "next-auth";
+
+export const authConfig = {
+  pages: {
+    signIn: "/login",
+  },
+  callbacks: {
+    authorized({ auth }) {
+      return !!auth?.user;
+    },
+  },
+  providers: [],
+  trustHost: true,
+} satisfies NextAuthConfig;
